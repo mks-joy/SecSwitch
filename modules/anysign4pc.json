@@ -1,0 +1,9 @@
+{
+  "id": "anysign4pc",
+  "name": "AnySign4PC",
+  "vendor": "SoftForum / Hancom WITH",
+  "serviceNames": ["AnySign4PC Launcher"],
+  "processes": [
+    { "name": "AnySign4PCLauncher.exe", "path": "C:\\Program Files (x86)\\SoftForum\\XecureWeb\\AnySign\\dll\\AnySign4PCLauncher.exe" }
+  ]
+}
