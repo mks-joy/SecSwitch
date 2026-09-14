@@ -19,7 +19,7 @@ public static class WindowsRuntime
             return false;
         }
 
-        foreach (var line in result.Output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var line in result.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
         {
             var trimmed = line.Trim();
             if (!trimmed.StartsWith("STATE", StringComparison.OrdinalIgnoreCase))
@@ -188,6 +188,14 @@ public static class WindowsRuntime
         try
         {
             using var process = Process.GetProcessById(processId);
+            var expected = Path.GetFileNameWithoutExtension(processName);
+            if (!string.Equals(process.ProcessName, expected, StringComparison.OrdinalIgnoreCase))
+            {
+                return new RuntimeActionResult(
+                    false,
+                    $"Refusing to stop PID {processId}: expected {expected}, found {process.ProcessName}.");
+            }
+
             process.Kill(entireProcessTree: true);
             process.WaitForExit(5000);
             return new RuntimeActionResult(true, $"Stopped process: {processName} (PID {processId})");
