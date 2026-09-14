@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace SecSwitch.Core;
 
 public sealed class ModuleManifest
@@ -10,6 +8,11 @@ public sealed class ModuleManifest
     public List<string> ServiceNames { get; init; } = [];
     public List<ProcessDefinition> Processes { get; init; } = [];
     public List<string> DetectionPaths { get; init; } = [];
+
+    // managed: SecSwitch may start the module and restore it after the session.
+    // observeOnly: SecSwitch detects/reports the module but does not change its runtime state.
+    // This is used for self-protected products until a verified reversible control path exists.
+    public string SessionControl { get; init; } = "managed";
 }
 
 public sealed class ProcessDefinition
