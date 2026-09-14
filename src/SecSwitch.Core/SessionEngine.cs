@@ -91,15 +91,33 @@ public static class SessionEngine
                 ModuleName = module.Name
             };
             state.Modules.Add(moduleState);
-            SaveState(state);
 
-            // Snapshot all allowlisted module processes before changing runtime state.
-            // This lets us distinguish processes that existed before the session from helper
-            // processes spawned by a service or another executable during the session.
+            // Snapshot every allowlisted process before changing the module. Persist both the
+            // names and the exact PIDs so restore can safely discover helpers that appear much
+            // later than the initial launch window while preserving anything that pre-existed.
             var beforeByProcess = module.Processes.ToDictionary(
                 process => process.Name,
                 process => WindowsRuntime.GetProcessIds(process.Name).ToHashSet(),
                 StringComparer.OrdinalIgnoreCase);
+
+            foreach (var processDefinition in module.Processes)
+            {
+                if (!moduleState.AllowlistedProcessNames.Contains(processDefinition.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    moduleState.AllowlistedProcessNames.Add(processDefinition.Name);
+                }
+
+                foreach (var processId in beforeByProcess[processDefinition.Name])
+                {
+                    moduleState.PreexistingProcesses.Add(new SessionProcessState
+                    {
+                        Name = processDefinition.Name,
+                        ProcessId = processId
+                    });
+                }
+            }
+
+            SaveState(state);
 
             var existingServices = module.ServiceNames
                 .Where(WindowsRuntime.ServiceExists)
@@ -131,10 +149,9 @@ public static class SessionEngine
                     await output.WriteLineAsync($"  {(result.Success ? "+" : "!")} {module.Name}: {result.Message}");
                 }
 
-                // A service may launch additional allowlisted helper processes that remain
-                // resident even after the service itself stops (RAON K is a real example).
-                // Track only processes that appeared after SecSwitch attempted to start the
-                // service so pre-existing user/vendor processes are never claimed by us.
+                // Capture helpers that appear immediately for status/debugging. Restore no
+                // longer depends on this short sampling window; it uses the persisted baseline
+                // and performs a fresh allowlisted sweep when the session ends.
                 if (attemptedServiceStart && beforeByProcess.Count > 0)
                 {
                     await Task.Delay(250, cancellationToken);
@@ -172,7 +189,6 @@ public static class SessionEngine
                 await output.WriteLineAsync($"  {(result.Success ? "+" : "!")} {module.Name}: {result.Message}");
             }
 
-            // Give helper processes a brief moment to appear, then diff against the snapshot.
             await Task.Delay(250, cancellationToken);
             var startedProcesses = CaptureNewProcesses(module, moduleState, beforeByProcess);
 
@@ -304,8 +320,9 @@ public static class SessionEngine
 
         foreach (var module in state.Modules.AsEnumerable().Reverse())
         {
-            // Stop services first so their own service processes can exit normally. Any
-            // allowlisted helper processes that remain afterwards are then cleaned up by PID.
+            // First ask services to shut down normally. Some products spawn helper processes
+            // after startup or keep monitors alive after the service stops, so this is followed
+            // by a fresh allowlisted process sweep based on the session's pre-start baseline.
             foreach (var service in module.StartedServices.AsEnumerable().Reverse())
             {
                 var result = WindowsRuntime.StopService(service);
@@ -316,14 +333,36 @@ public static class SessionEngine
                 }
             }
 
-            foreach (var process in module.StartedProcesses.AsEnumerable().Reverse())
+            if (module.AllowlistedProcessNames.Count > 0 || module.StartedProcesses.Count > 0)
             {
-                var result = WindowsRuntime.StopProcess(process.ProcessId, process.Name);
-                await output.WriteLineAsync($"  {(result.Success ? "-" : "!")} {module.ModuleName}: {result.Message}");
+                await Task.Delay(350);
+                failures += await CleanupNewAllowlistedProcessesAsync(module, output, maxPasses: 3);
+            }
+
+            // A monitor process can occasionally restart its service while cleanup is in
+            // progress. Re-check only services that SecSwitch itself started, stop them again
+            // if needed, then perform one final process sweep.
+            var restartedService = false;
+            foreach (var service in module.StartedServices.AsEnumerable().Reverse())
+            {
+                if (!WindowsRuntime.IsServiceRunning(service))
+                {
+                    continue;
+                }
+
+                restartedService = true;
+                var result = WindowsRuntime.StopService(service);
+                await output.WriteLineAsync($"  {(result.Success ? "-" : "!")} {module.ModuleName}: service restarted during cleanup; {result.Message}");
                 if (!result.Success)
                 {
                     failures++;
                 }
+            }
+
+            if (restartedService && (module.AllowlistedProcessNames.Count > 0 || module.StartedProcesses.Count > 0))
+            {
+                await Task.Delay(350);
+                failures += await CleanupNewAllowlistedProcessesAsync(module, output, maxPasses: 2);
             }
         }
 
@@ -333,6 +372,80 @@ public static class SessionEngine
             : $"Session ended with {failures} restore error(s). Review the messages above.");
 
         return failures == 0 ? 0 : 1;
+    }
+
+    private static async Task<int> CleanupNewAllowlistedProcessesAsync(
+        SessionModuleState module,
+        TextWriter output,
+        int maxPasses)
+    {
+        var processNames = module.AllowlistedProcessNames.Count > 0
+            ? module.AllowlistedProcessNames.Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+            : module.StartedProcesses.Select(process => process.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        var baselineByName = module.PreexistingProcesses
+            .GroupBy(process => process.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(process => process.ProcessId).ToHashSet(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var failures = 0;
+
+        for (var pass = 0; pass < maxPasses; pass++)
+        {
+            var foundNewProcess = false;
+
+            foreach (var processName in processNames)
+            {
+                baselineByName.TryGetValue(processName, out var baselineIds);
+                baselineIds ??= [];
+
+                foreach (var processId in WindowsRuntime.GetProcessIds(processName))
+                {
+                    if (baselineIds.Contains(processId))
+                    {
+                        continue;
+                    }
+
+                    foundNewProcess = true;
+                    var result = WindowsRuntime.StopProcess(processId, processName);
+                    await output.WriteLineAsync($"  {(result.Success ? "-" : "!")} {module.ModuleName}: {result.Message}");
+                    if (!result.Success)
+                    {
+                        failures++;
+                    }
+                }
+            }
+
+            if (!foundNewProcess)
+            {
+                break;
+            }
+
+            if (pass < maxPasses - 1)
+            {
+                await Task.Delay(300);
+            }
+        }
+
+        foreach (var processName in processNames)
+        {
+            baselineByName.TryGetValue(processName, out var baselineIds);
+            baselineIds ??= [];
+
+            var residual = WindowsRuntime.GetProcessIds(processName)
+                .Where(processId => !baselineIds.Contains(processId))
+                .ToArray();
+
+            foreach (var processId in residual)
+            {
+                await output.WriteLineAsync($"  ! {module.ModuleName}: process still running after cleanup ({processName}, PID {processId})");
+                failures++;
+            }
+        }
+
+        return failures;
     }
 
     private static List<SessionProcessState> CaptureNewProcesses(
