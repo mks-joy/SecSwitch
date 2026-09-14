@@ -1,0 +1,9 @@
+{
+  "id": "ahnlab-ast",
+  "name": "AhnLab Safe Transaction",
+  "vendor": "AhnLab",
+  "serviceNames": ["SafeTransactionSVC"],
+  "processes": [
+    { "name": "ASDSvc.exe", "path": "C:\\Program Files\\AhnLab\\Safe Transaction\\ASDSvc.exe" }
+  ]
+}
