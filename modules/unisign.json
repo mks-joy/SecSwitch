@@ -1,7 +1,10 @@
 {
   "id": "crosscert-unisign",
   "name": "CrossCert UniSign",
-  "vendor": "CrossCert",
+  "vendor": "한국전자인증 / CrossCert",
+  "descriptionKo": "한국전자인증 공동인증서·전자서명 기능을 웹사이트에서 사용하기 위한 로컬 프로그램입니다.",
+  "purpose": "공동인증서 / 전자서명",
+  "knownUses": ["수출바우처", "지식재산보호원 시스템", "공동인증서 로그인 서비스"],
   "serviceNames": [],
   "processes": [
     { "name": "CCDaemon.exe", "path": "C:\\Program Files (x86)\\Crosscert\\UniSignCRSV3\\CCDaemon.exe" },
