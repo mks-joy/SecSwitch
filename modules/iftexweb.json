@@ -1,0 +1,11 @@
+{
+  "id": "iftexweb",
+  "name": "ExAdapter_NxWeb",
+  "vendor": "Infotech Corporation",
+  "serviceNames": ["iftExWeb"],
+  "processes": [
+    { "name": "iftExWeb.exe", "path": "C:\\infotech\\iftNxService\\iftExWeb.exe" },
+    { "name": "iftExWebD.exe", "path": "C:\\infotech\\iftNxService\\iftExWebD.exe" }
+  ],
+  "detectionPaths": ["C:\\infotech\\iftNxService"]
+}
