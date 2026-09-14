@@ -2,9 +2,12 @@
   "id": "ahnlab-ast",
   "name": "AhnLab Safe Transaction",
   "vendor": "AhnLab",
-  "sessionControl": "observeOnly",
+  "descriptionKo": "금융·공공 웹사이트 이용 시 브라우저 거래 보호와 악성 동작 차단을 위해 설치되는 보안 모듈입니다.",
+  "purpose": "웹 거래 보호 / 방화벽·보안 기능",
+  "knownUses": ["금융기관 웹사이트", "일부 공공서비스"],
   "serviceNames": ["SafeTransactionSVC"],
   "processes": [
     { "name": "ASDSvc.exe", "path": "C:\\Program Files\\AhnLab\\Safe Transaction\\ASDSvc.exe" }
-  ]
+  ],
+  "sessionControl": "managed"
 }
