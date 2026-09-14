@@ -1,0 +1,9 @@
+{
+  "id": "magicline4nx",
+  "name": "MagicLine4NX",
+  "vendor": "DreamSecurity",
+  "serviceNames": ["MagicLine4NXSVC"],
+  "processes": [
+    { "name": "MagicLine4NXServices.exe", "path": "C:\\Program Files (x86)\\DreamSecurity\\MagicLine4NX\\MagicLine4NXServices.exe" }
+  ]
+}
