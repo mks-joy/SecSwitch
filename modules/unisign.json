@@ -1,0 +1,11 @@
+{
+  "id": "crosscert-unisign",
+  "name": "CrossCert UniSign",
+  "vendor": "CrossCert",
+  "serviceNames": [],
+  "processes": [
+    { "name": "CCDaemon.exe", "path": "C:\\Program Files (x86)\\Crosscert\\UniSignCRSV3\\CCDaemon.exe" },
+    { "name": "UniCRSLocalServer.exe", "path": "C:\\Program Files (x86)\\Crosscert\\UniSignCRSV3\\UniCRSLocalServer.exe" }
+  ],
+  "detectionPaths": ["C:\\Program Files (x86)\\Crosscert\\UniSignCRSV3"]
+}
