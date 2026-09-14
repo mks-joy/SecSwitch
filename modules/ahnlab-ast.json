@@ -9,5 +9,5 @@
   "processes": [
     { "name": "ASDSvc.exe", "path": "C:\\Program Files\\AhnLab\\Safe Transaction\\ASDSvc.exe" }
   ],
-  "sessionControl": "managed"
+  "sessionControl": "observeOnly"
 }
