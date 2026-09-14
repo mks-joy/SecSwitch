@@ -2,6 +2,9 @@
   "id": "raonk",
   "name": "RAON K",
   "vendor": "RAONWIZ",
+  "descriptionKo": "웹사이트 입력 보호와 보안 연동을 위해 설치되는 RAONWIZ 계열 로컬 보안 모듈입니다.",
+  "purpose": "키보드 입력 보호 / 웹 보안 연동",
+  "knownUses": ["금융기관 웹사이트"],
   "serviceNames": ["RAON K"],
   "processes": [
     { "name": "raonk.svc.exe", "path": "C:\\Program Files (x86)\\RAONWIZ\\RAON K\\raonk.svc.exe" },
