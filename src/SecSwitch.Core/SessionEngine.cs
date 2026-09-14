@@ -122,30 +122,60 @@ public static class SessionEngine
                 continue;
             }
 
+            // For process-only modules, snapshot every allowlisted process before launching
+            // anything. One executable may spawn another executable in the same module
+            // (UniSign is a real example), so tracking only the direct Process.Start result
+            // can leave helper processes behind at session end.
+            var beforeByProcess = module.Processes.ToDictionary(
+                process => process.Name,
+                process => WindowsRuntime.GetProcessIds(process.Name).ToHashSet(),
+                StringComparer.OrdinalIgnoreCase);
+
             foreach (var processDefinition in module.Processes)
             {
-                if (WindowsRuntime.GetProcessIds(processDefinition.Name).Count > 0)
+                var currentIds = WindowsRuntime.GetProcessIds(processDefinition.Name);
+                if (currentIds.Count > 0)
                 {
-                    await output.WriteLineAsync($"  = {module.Name}: process already running ({processDefinition.Name})");
+                    var existedBefore = beforeByProcess[processDefinition.Name].Count > 0;
+                    await output.WriteLineAsync(existedBefore
+                        ? $"  = {module.Name}: process already running ({processDefinition.Name})"
+                        : $"  + {module.Name}: process started by module launch ({processDefinition.Name})");
                     continue;
                 }
 
-                var result = WindowsRuntime.StartProcess(processDefinition, out var processIds);
+                var result = WindowsRuntime.StartProcess(processDefinition, out _);
                 await output.WriteLineAsync($"  {(result.Success ? "+" : "!")} {module.Name}: {result.Message}");
+            }
 
-                foreach (var processId in processIds)
+            // Give helper processes a brief moment to appear, then diff against the snapshot.
+            await Task.Delay(250, cancellationToken);
+
+            foreach (var processDefinition in module.Processes)
+            {
+                var beforeIds = beforeByProcess[processDefinition.Name];
+                foreach (var processId in WindowsRuntime.GetProcessIds(processDefinition.Name))
                 {
+                    if (beforeIds.Contains(processId))
+                    {
+                        continue;
+                    }
+
+                    if (moduleState.StartedProcesses.Any(process => process.ProcessId == processId))
+                    {
+                        continue;
+                    }
+
                     moduleState.StartedProcesses.Add(new SessionProcessState
                     {
                         Name = processDefinition.Name,
                         ProcessId = processId
                     });
                 }
+            }
 
-                if (processIds.Count > 0)
-                {
-                    SaveState(state);
-                }
+            if (moduleState.StartedProcesses.Count > 0)
+            {
+                SaveState(state);
             }
         }
 
