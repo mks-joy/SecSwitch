@@ -1,7 +1,10 @@
 {
-  "id": "signkorea-wd",
+  "id": "signkorea",
   "name": "SignKoreaWD",
   "vendor": "SignKorea",
+  "descriptionKo": "SignKorea 인증서와 전자서명 기능을 웹사이트에서 사용하기 위한 로컬 모듈입니다.",
+  "purpose": "공동인증서 / 전자서명",
+  "knownUses": ["전자서명·인증서 사용 웹사이트"],
   "serviceNames": ["SignKoreaWD"],
   "processes": [
     { "name": "SignKoreaWD.exe", "path": "C:\\Program Files (x86)\\SignKorea\\skcert\\SignKoreaWD.exe" }
