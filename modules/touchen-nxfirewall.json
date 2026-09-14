@@ -1,7 +1,10 @@
 {
   "id": "touchen-nxfirewall",
   "name": "TouchEn nxFirewall",
-  "vendor": "RAON Secure",
+  "vendor": "RaonSecure",
+  "descriptionKo": "금융·공공 웹사이트에서 웹 거래 보호와 방화벽 기능을 제공하는 TouchEn 계열 보안 모듈입니다.",
+  "purpose": "웹 방화벽 / 거래 보호",
+  "knownUses": ["금융기관 웹사이트"],
   "serviceNames": ["ToucnEn_nxFirewall"],
   "processes": [
     { "name": "TEFSvrP64.exe", "path": "C:\\Program Files (x86)\\TouchEn\\Firewall\\TEFSvrP64.exe" }
