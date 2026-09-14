@@ -2,6 +2,9 @@
   "id": "magicline4nx",
   "name": "MagicLine4NX",
   "vendor": "DreamSecurity",
+  "descriptionKo": "공동인증서·전자서명과 브라우저 보안 연동을 위해 설치되는 모듈입니다.",
+  "purpose": "인증서 / 전자서명 / 브라우저 보안",
+  "knownUses": ["공공기관 웹사이트", "일부 금융서비스"],
   "serviceNames": ["MagicLine4NXSVC"],
   "processes": [
     { "name": "MagicLine4NXServices.exe", "path": "C:\\Program Files (x86)\\DreamSecurity\\MagicLine4NX\\MagicLine4NXServices.exe" }
