@@ -78,6 +78,13 @@ public static class SessionEngine
                 continue;
             }
 
+            if (string.Equals(module.SessionControl, "observeOnly", StringComparison.OrdinalIgnoreCase))
+            {
+                var runtimeState = status.Running ? "running" : "stopped";
+                await output.WriteLineAsync($"  ~ {module.Name}: observe-only ({runtimeState}); runtime state not changed");
+                continue;
+            }
+
             var moduleState = new SessionModuleState
             {
                 ModuleId = module.Id,
