@@ -48,7 +48,12 @@ if (command == "profile")
             continue;
         }
 
-        Console.WriteLine($"{module.Name,-32} {ProfileStore.GetMode(profile, module.Id)}");
+        var storedMode = ProfileStore.GetMode(profile, module.Id);
+        var modeText = IsObserveOnly(module) && string.Equals(storedMode, ProfileModes.OnDemand, StringComparison.OrdinalIgnoreCase)
+            ? "ondemand (currently observe-only; session control disabled)"
+            : storedMode;
+
+        Console.WriteLine($"{module.Name,-32} {modeText}");
     }
 
     return 0;
@@ -76,13 +81,21 @@ if (command == "session")
             }
 
             var profile = ProfileStore.Load();
-            var managedModules = modules
+            var requestedModules = modules
                 .Where(module => string.Equals(ProfileStore.GetMode(profile, module.Id), ProfileModes.OnDemand, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
 
+            var skippedModules = requestedModules.Where(IsObserveOnly).ToArray();
+            foreach (var module in skippedModules)
+            {
+                Console.WriteLine($"~ {module.Name}: profile requests on-demand management, but this module is currently observe-only and will not be changed.");
+            }
+
+            var managedModules = requestedModules.Where(module => !IsObserveOnly(module)).ToArray();
+
             if (managedModules.Length == 0)
             {
-                Console.Error.WriteLine("No modules are configured for on-demand management. Run 'secswitch setup'.");
+                Console.Error.WriteLine("No modules with verified runtime control are configured for on-demand management. Run 'secswitch setup'.");
                 return 1;
             }
 
@@ -172,6 +185,11 @@ foreach (var module in loadedModules)
         Console.WriteLine($"  알려진 사용처: {string.Join(", ", module.KnownUses)}");
     }
 
+    if (IsObserveOnly(module))
+    {
+        Console.WriteLine("  SecSwitch 제어 상태: 관찰만 지원 (안전한 종료/원복 경로 검증 전)");
+    }
+
     if (command == "status")
     {
         foreach (var item in status.Evidence)
@@ -237,7 +255,7 @@ static int RunSetup(IReadOnlyList<ModuleManifest> modules)
         Console.WriteLine($"현재 상태: {(status.Running ? "실행 중" : "중지")} / {startType}");
         Console.WriteLine($"현재 점유: CPU {usage.CpuPercent:0.00}% / RAM {usage.WorkingSetBytes / 1024d / 1024d:0.0} MB / 프로세스 {usage.ProcessCount}개");
 
-        if (string.Equals(module.SessionControl, "observeOnly", StringComparison.OrdinalIgnoreCase))
+        if (IsObserveOnly(module))
         {
             Console.WriteLine("현재 이 모듈은 안전한 종료/원복 경로가 검증되지 않아 관찰만 지원합니다. 설정을 변경하지 않습니다.");
             profile.ModuleModes[module.Id] = ProfileModes.Keep;
@@ -271,6 +289,11 @@ static int RunSetup(IReadOnlyList<ModuleManifest> modules)
     Console.WriteLine($"설정 저장 완료: {ProfileStore.ProfileFilePath}");
     Console.WriteLine("이후에는 'secswitch session start --minutes 5'로 On-demand 모듈을 준비할 수 있습니다.");
     return 0;
+}
+
+static bool IsObserveOnly(ModuleManifest module)
+{
+    return string.Equals(module.SessionControl, "observeOnly", StringComparison.OrdinalIgnoreCase);
 }
 
 static IReadOnlyList<ModuleManifest>? LoadModulesOrExit(string modulesPath)
