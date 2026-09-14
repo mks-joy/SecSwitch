@@ -1,0 +1,9 @@
+{
+  "id": "wizvera-process-manager",
+  "name": "WIZVERA Process Manager",
+  "vendor": "WIZVERA",
+  "serviceNames": ["WizveraPMSvc"],
+  "processes": [
+    { "name": "wpmsvc.exe", "path": "C:\\Program Files (x86)\\Wizvera\\Common\\wpmsvc\\wpmsvc.exe" }
+  ]
+}
