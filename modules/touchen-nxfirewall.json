@@ -1,0 +1,9 @@
+{
+  "id": "touchen-nxfirewall",
+  "name": "TouchEn nxFirewall",
+  "vendor": "RAON Secure",
+  "serviceNames": ["ToucnEn_nxFirewall"],
+  "processes": [
+    { "name": "TEFSvrP64.exe", "path": "C:\\Program Files (x86)\\TouchEn\\Firewall\\TEFSvrP64.exe" }
+  ]
+}
