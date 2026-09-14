@@ -1,0 +1,9 @@
+{
+  "id": "ipinside-lws",
+  "name": "IPinside LWS",
+  "vendor": "Interezen",
+  "serviceNames": ["Interezen_service"],
+  "processes": [
+    { "name": "I3GMainSvc.exe", "path": "C:\\Program Files (x86)\\IPinside_LWS\\I3GMainSvc.exe" }
+  ]
+}
