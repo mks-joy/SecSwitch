@@ -7,6 +7,7 @@ public static class ModuleScanner
     public static ModuleStatus Scan(ModuleManifest module)
     {
         var evidence = new List<string>();
+        var startTypes = new List<string>();
         var installed = false;
         var running = false;
 
@@ -16,6 +17,10 @@ public static class ModuleScanner
             {
                 installed = true;
                 evidence.Add($"service:{serviceName}");
+
+                var startType = ServiceConfiguration.GetStartType(serviceName);
+                startTypes.Add($"{serviceName}: {startType}");
+                evidence.Add($"start-type:{serviceName}:{startType}");
 
                 if (WindowsRuntime.IsServiceRunning(serviceName))
                 {
@@ -34,7 +39,8 @@ public static class ModuleScanner
             }
 
             var processName = Path.GetFileNameWithoutExtension(process.Name);
-            if (Process.GetProcessesByName(processName).Length > 0)
+            using var runningProcess = Process.GetProcessesByName(processName).FirstOrDefault();
+            if (runningProcess is not null)
             {
                 running = true;
                 installed = true;
@@ -57,6 +63,7 @@ public static class ModuleScanner
             Module = module,
             Installed = installed,
             Running = running,
+            ServiceStartTypes = startTypes,
             Evidence = evidence
         };
     }
