@@ -93,12 +93,22 @@ public static class SessionEngine
             state.Modules.Add(moduleState);
             SaveState(state);
 
+            // Snapshot all allowlisted module processes before changing runtime state.
+            // This lets us distinguish processes that existed before the session from helper
+            // processes spawned by a service or another executable during the session.
+            var beforeByProcess = module.Processes.ToDictionary(
+                process => process.Name,
+                process => WindowsRuntime.GetProcessIds(process.Name).ToHashSet(),
+                StringComparer.OrdinalIgnoreCase);
+
             var existingServices = module.ServiceNames
                 .Where(WindowsRuntime.ServiceExists)
                 .ToArray();
 
             if (existingServices.Length > 0)
             {
+                var attemptedServiceStart = false;
+
                 foreach (var serviceName in existingServices)
                 {
                     if (WindowsRuntime.IsServiceRunning(serviceName))
@@ -106,6 +116,8 @@ public static class SessionEngine
                         await output.WriteLineAsync($"  = {module.Name}: service already running ({serviceName})");
                         continue;
                     }
+
+                    attemptedServiceStart = true;
 
                     // Persist cleanup intent before attempting the start. This deliberately
                     // closes the failure window where a service starts successfully but the
@@ -119,18 +131,31 @@ public static class SessionEngine
                     await output.WriteLineAsync($"  {(result.Success ? "+" : "!")} {module.Name}: {result.Message}");
                 }
 
+                // A service may launch additional allowlisted helper processes that remain
+                // resident even after the service itself stops (RAON K is a real example).
+                // Track only processes that appeared after SecSwitch attempted to start the
+                // service so pre-existing user/vendor processes are never claimed by us.
+                if (attemptedServiceStart && beforeByProcess.Count > 0)
+                {
+                    await Task.Delay(250, cancellationToken);
+                    var tracked = CaptureNewProcesses(module, moduleState, beforeByProcess);
+                    foreach (var process in tracked)
+                    {
+                        await output.WriteLineAsync($"  + {module.Name}: tracked process started with service ({process.Name}, PID {process.ProcessId})");
+                    }
+
+                    if (tracked.Count > 0)
+                    {
+                        SaveState(state);
+                    }
+                }
+
                 continue;
             }
 
-            // For process-only modules, snapshot every allowlisted process before launching
-            // anything. One executable may spawn another executable in the same module
-            // (UniSign is a real example), so tracking only the direct Process.Start result
-            // can leave helper processes behind at session end.
-            var beforeByProcess = module.Processes.ToDictionary(
-                process => process.Name,
-                process => WindowsRuntime.GetProcessIds(process.Name).ToHashSet(),
-                StringComparer.OrdinalIgnoreCase);
-
+            // For process-only modules, one executable may spawn another executable in the
+            // same module (UniSign is a real example). Start missing processes and then diff
+            // every allowlisted process against the snapshot taken above.
             foreach (var processDefinition in module.Processes)
             {
                 var currentIds = WindowsRuntime.GetProcessIds(processDefinition.Name);
@@ -149,31 +174,9 @@ public static class SessionEngine
 
             // Give helper processes a brief moment to appear, then diff against the snapshot.
             await Task.Delay(250, cancellationToken);
+            var startedProcesses = CaptureNewProcesses(module, moduleState, beforeByProcess);
 
-            foreach (var processDefinition in module.Processes)
-            {
-                var beforeIds = beforeByProcess[processDefinition.Name];
-                foreach (var processId in WindowsRuntime.GetProcessIds(processDefinition.Name))
-                {
-                    if (beforeIds.Contains(processId))
-                    {
-                        continue;
-                    }
-
-                    if (moduleState.StartedProcesses.Any(process => process.ProcessId == processId))
-                    {
-                        continue;
-                    }
-
-                    moduleState.StartedProcesses.Add(new SessionProcessState
-                    {
-                        Name = processDefinition.Name,
-                        ProcessId = processId
-                    });
-                }
-            }
-
-            if (moduleState.StartedProcesses.Count > 0)
+            if (startedProcesses.Count > 0)
             {
                 SaveState(state);
             }
@@ -301,9 +304,11 @@ public static class SessionEngine
 
         foreach (var module in state.Modules.AsEnumerable().Reverse())
         {
-            foreach (var process in module.StartedProcesses.AsEnumerable().Reverse())
+            // Stop services first so their own service processes can exit normally. Any
+            // allowlisted helper processes that remain afterwards are then cleaned up by PID.
+            foreach (var service in module.StartedServices.AsEnumerable().Reverse())
             {
-                var result = WindowsRuntime.StopProcess(process.ProcessId, process.Name);
+                var result = WindowsRuntime.StopService(service);
                 await output.WriteLineAsync($"  {(result.Success ? "-" : "!")} {module.ModuleName}: {result.Message}");
                 if (!result.Success)
                 {
@@ -311,9 +316,9 @@ public static class SessionEngine
                 }
             }
 
-            foreach (var service in module.StartedServices.AsEnumerable().Reverse())
+            foreach (var process in module.StartedProcesses.AsEnumerable().Reverse())
             {
-                var result = WindowsRuntime.StopService(service);
+                var result = WindowsRuntime.StopProcess(process.ProcessId, process.Name);
                 await output.WriteLineAsync($"  {(result.Success ? "-" : "!")} {module.ModuleName}: {result.Message}");
                 if (!result.Success)
                 {
@@ -328,6 +333,48 @@ public static class SessionEngine
             : $"Session ended with {failures} restore error(s). Review the messages above.");
 
         return failures == 0 ? 0 : 1;
+    }
+
+    private static List<SessionProcessState> CaptureNewProcesses(
+        ModuleManifest module,
+        SessionModuleState moduleState,
+        IReadOnlyDictionary<string, HashSet<int>> beforeByProcess)
+    {
+        var captured = new List<SessionProcessState>();
+
+        foreach (var processDefinition in module.Processes)
+        {
+            if (!beforeByProcess.TryGetValue(processDefinition.Name, out var beforeIds))
+            {
+                beforeIds = [];
+            }
+
+            foreach (var processId in WindowsRuntime.GetProcessIds(processDefinition.Name))
+            {
+                if (beforeIds.Contains(processId))
+                {
+                    continue;
+                }
+
+                if (moduleState.StartedProcesses.Any(process =>
+                        process.ProcessId == processId &&
+                        string.Equals(process.Name, processDefinition.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                var processState = new SessionProcessState
+                {
+                    Name = processDefinition.Name,
+                    ProcessId = processId
+                };
+
+                moduleState.StartedProcesses.Add(processState);
+                captured.Add(processState);
+            }
+        }
+
+        return captured;
     }
 
     private static void SaveState(SessionState state)
