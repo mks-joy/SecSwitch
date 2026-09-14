@@ -1,0 +1,11 @@
+{
+  "id": "raonk",
+  "name": "RAON K",
+  "vendor": "RAONWIZ",
+  "serviceNames": ["RAON K"],
+  "processes": [
+    { "name": "raonk.svc.exe", "path": "C:\\Program Files (x86)\\RAONWIZ\\RAON K\\raonk.svc.exe" },
+    { "name": "raonk.moni.exe", "path": "C:\\ProgramData\\RAONWIZ\\RAON K\\raonk.moni.exe" },
+    { "name": "raonk.exe", "path": "C:\\ProgramData\\RAONWIZ\\RAON K\\raonk.exe" }
+  ]
+}
