@@ -1,0 +1,17 @@
+{
+  "id": "veraport-g3",
+  "name": "VeraPort G3",
+  "vendor": "WIZVERA",
+  "descriptionKo": "금융·공공 웹사이트에서 여러 보안 프로그램의 설치 여부 확인과 실행 연동에 사용되는 통합 보안모듈 관리 프로그램입니다.",
+  "purpose": "보안 프로그램 설치 확인 / 실행 연동",
+  "knownUses": ["우리은행", "금융기관 웹사이트", "보안프로그램 통합설치 환경"],
+  "processes": [
+    { "name": "veraport-x64.exe", "path": "C:\\Program Files\\Wizvera\\Veraport20\\veraport-x64.exe" },
+    { "name": "veraportmain20.exe", "path": "C:\\Program Files\\Wizvera\\Veraport20\\veraportmain20.exe" },
+    { "name": "veraport20unloader.exe", "path": "C:\\Program Files\\Wizvera\\Veraport20\\veraport20unloader.exe" }
+  ],
+  "detectionPaths": [
+    "C:\\Program Files\\Wizvera\\Veraport20"
+  ],
+  "sessionControl": "observeOnly"
+}
