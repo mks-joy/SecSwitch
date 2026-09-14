@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SecSwitch.Core", "src\SecSw
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SecSwitch.Cli", "src\SecSwitch.Cli\SecSwitch.Cli.csproj", "{B9949E44-3D36-4F67-944C-E0B981AFAD6B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SecSwitch.Tray", "src\SecSwitch.Tray\SecSwitch.Tray.csproj", "{A6D8A8A1-59CF-4ED1-A8D0-19F7A0BBA8C3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,5 +22,9 @@ Global
 		{B9949E44-3D36-4F67-944C-E0B981AFAD6B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B9949E44-3D36-4F67-944C-E0B981AFAD6B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B9949E44-3D36-4F67-944C-E0B981AFAD6B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6D8A8A1-59CF-4ED1-A8D0-19F7A0BBA8C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6D8A8A1-59CF-4ED1-A8D0-19F7A0BBA8C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6D8A8A1-59CF-4ED1-A8D0-19F7A0BBA8C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6D8A8A1-59CF-4ED1-A8D0-19F7A0BBA8C3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
