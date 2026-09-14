@@ -1,10 +1,28 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace SecSwitch.Core;
 
 public static class WindowsRuntime
 {
+    private const uint ScManagerConnect = 0x0001;
+    private const uint ServiceQueryStatus = 0x0004;
+    private const uint ServiceStart = 0x0010;
+    private const uint ServiceStop = 0x0020;
+
+    private const uint ServiceControlStop = 0x00000001;
+    private const uint ServiceStopped = 0x00000001;
+    private const uint ServiceStartPending = 0x00000002;
+    private const uint ServiceStopPending = 0x00000003;
+    private const uint ServiceRunning = 0x00000004;
+
+    private const int ScStatusProcessInfo = 0;
+    private const int ErrorAccessDenied = 5;
+    private const int ErrorServiceAlreadyRunning = 1056;
+    private const int ErrorServiceNotActive = 1062;
+
     public static bool ServiceExists(string serviceName)
     {
         using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{serviceName}");
@@ -13,32 +31,8 @@ public static class WindowsRuntime
 
     public static bool IsServiceRunning(string serviceName)
     {
-        var result = RunSc("query", serviceName);
-        if (result.ExitCode != 0)
-        {
-            return false;
-        }
-
-        foreach (var line in result.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var trimmed = line.Trim();
-            if (!trimmed.StartsWith("STATE", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var colon = trimmed.IndexOf(':');
-            if (colon < 0)
-            {
-                continue;
-            }
-
-            var afterColon = trimmed[(colon + 1)..].TrimStart();
-            return afterColon.StartsWith("4 ", StringComparison.Ordinal)
-                   || string.Equals(afterColon, "4", StringComparison.Ordinal);
-        }
-
-        return false;
+        return TryGetServiceState(serviceName, out var state, out _)
+               && state == ServiceRunning;
     }
 
     public static RuntimeActionResult StartService(string serviceName, TimeSpan? timeout = null)
@@ -48,30 +42,76 @@ public static class WindowsRuntime
             return new RuntimeActionResult(false, $"Service not found: {serviceName}");
         }
 
-        if (IsServiceRunning(serviceName))
+        var manager = NativeOpenSCManager(null, null, ScManagerConnect);
+        if (manager == IntPtr.Zero)
         {
-            return new RuntimeActionResult(true, $"Service already running: {serviceName}");
+            return Win32Failure("open Service Control Manager", serviceName, Marshal.GetLastWin32Error());
         }
 
-        var result = RunSc("start", serviceName);
-        if (result.ExitCode != 0)
+        try
         {
-            return new RuntimeActionResult(false, BuildScError("start", serviceName, result));
-        }
-
-        var wait = timeout ?? TimeSpan.FromSeconds(8);
-        var sw = Stopwatch.StartNew();
-        while (sw.Elapsed < wait)
-        {
-            if (IsServiceRunning(serviceName))
+            var service = NativeOpenService(manager, serviceName, ServiceQueryStatus | ServiceStart);
+            if (service == IntPtr.Zero)
             {
-                return new RuntimeActionResult(true, $"Started service: {serviceName}");
+                return Win32Failure("open service", serviceName, Marshal.GetLastWin32Error());
             }
 
-            Thread.Sleep(250);
-        }
+            try
+            {
+                if (!TryQueryServiceState(service, out var state, out var queryError))
+                {
+                    return Win32Failure("query service", serviceName, queryError);
+                }
 
-        return new RuntimeActionResult(false, $"Timed out waiting for service to start: {serviceName}");
+                if (state == ServiceRunning)
+                {
+                    return new RuntimeActionResult(true, $"Service already running: {serviceName}");
+                }
+
+                var wait = timeout ?? TimeSpan.FromSeconds(8);
+
+                if (state == ServiceStartPending)
+                {
+                    return WaitForServiceState(service, serviceName, ServiceRunning, wait,
+                        $"Service already starting: {serviceName}",
+                        $"Timed out waiting for service to start: {serviceName}");
+                }
+
+                if (state == ServiceStopPending)
+                {
+                    var stopped = WaitForServiceState(service, serviceName, ServiceStopped, wait,
+                        $"Service stopped before restart: {serviceName}",
+                        $"Timed out waiting for service to stop before restart: {serviceName}");
+                    if (!stopped.Success)
+                    {
+                        return stopped;
+                    }
+                }
+
+                if (!NativeStartService(service, 0, null))
+                {
+                    var error = Marshal.GetLastWin32Error();
+                    if (error == ErrorServiceAlreadyRunning)
+                    {
+                        return new RuntimeActionResult(true, $"Service already running: {serviceName}");
+                    }
+
+                    return Win32Failure("start service", serviceName, error);
+                }
+
+                return WaitForServiceState(service, serviceName, ServiceRunning, wait,
+                    $"Started service: {serviceName}",
+                    $"Timed out waiting for service to start: {serviceName}");
+            }
+            finally
+            {
+                NativeCloseServiceHandle(service);
+            }
+        }
+        finally
+        {
+            NativeCloseServiceHandle(manager);
+        }
     }
 
     public static RuntimeActionResult StopService(string serviceName, TimeSpan? timeout = null)
@@ -81,30 +121,66 @@ public static class WindowsRuntime
             return new RuntimeActionResult(false, $"Service not found: {serviceName}");
         }
 
-        if (!IsServiceRunning(serviceName))
+        var manager = NativeOpenSCManager(null, null, ScManagerConnect);
+        if (manager == IntPtr.Zero)
         {
-            return new RuntimeActionResult(true, $"Service already stopped: {serviceName}");
+            return Win32Failure("open Service Control Manager", serviceName, Marshal.GetLastWin32Error());
         }
 
-        var result = RunSc("stop", serviceName);
-        if (result.ExitCode != 0)
+        try
         {
-            return new RuntimeActionResult(false, BuildScError("stop", serviceName, result));
-        }
-
-        var wait = timeout ?? TimeSpan.FromSeconds(8);
-        var sw = Stopwatch.StartNew();
-        while (sw.Elapsed < wait)
-        {
-            if (!IsServiceRunning(serviceName))
+            var service = NativeOpenService(manager, serviceName, ServiceQueryStatus | ServiceStop);
+            if (service == IntPtr.Zero)
             {
-                return new RuntimeActionResult(true, $"Stopped service: {serviceName}");
+                return Win32Failure("open service", serviceName, Marshal.GetLastWin32Error());
             }
 
-            Thread.Sleep(250);
-        }
+            try
+            {
+                if (!TryQueryServiceState(service, out var state, out var queryError))
+                {
+                    return Win32Failure("query service", serviceName, queryError);
+                }
 
-        return new RuntimeActionResult(false, $"Timed out waiting for service to stop: {serviceName}");
+                if (state == ServiceStopped)
+                {
+                    return new RuntimeActionResult(true, $"Service already stopped: {serviceName}");
+                }
+
+                var wait = timeout ?? TimeSpan.FromSeconds(8);
+
+                if (state == ServiceStopPending)
+                {
+                    return WaitForServiceState(service, serviceName, ServiceStopped, wait,
+                        $"Service already stopping: {serviceName}",
+                        $"Timed out waiting for service to stop: {serviceName}");
+                }
+
+                var status = new ServiceStatus();
+                if (!NativeControlService(service, ServiceControlStop, ref status))
+                {
+                    var error = Marshal.GetLastWin32Error();
+                    if (error == ErrorServiceNotActive)
+                    {
+                        return new RuntimeActionResult(true, $"Service already stopped: {serviceName}");
+                    }
+
+                    return Win32Failure("stop service", serviceName, error);
+                }
+
+                return WaitForServiceState(service, serviceName, ServiceStopped, wait,
+                    $"Stopped service: {serviceName}",
+                    $"Timed out waiting for service to stop: {serviceName}");
+            }
+            finally
+            {
+                NativeCloseServiceHandle(service);
+            }
+        }
+        finally
+        {
+            NativeCloseServiceHandle(manager);
+        }
     }
 
     public static IReadOnlyList<int> GetProcessIds(string processName)
@@ -191,8 +267,7 @@ public static class WindowsRuntime
             var expected = Path.GetFileNameWithoutExtension(processName);
             if (!string.Equals(process.ProcessName, expected, StringComparison.OrdinalIgnoreCase))
             {
-                return new RuntimeActionResult(
-                    false,
+                return new RuntimeActionResult(false,
                     $"Refusing to stop PID {processId}: expected {expected}, found {process.ProcessName}.");
             }
 
@@ -210,48 +285,155 @@ public static class WindowsRuntime
         }
     }
 
-    private static ScResult RunSc(string verb, string serviceName)
+    private static bool TryGetServiceState(string serviceName, out uint state, out int errorCode)
     {
+        state = 0;
+        errorCode = 0;
+
+        var manager = NativeOpenSCManager(null, null, ScManagerConnect);
+        if (manager == IntPtr.Zero)
+        {
+            errorCode = Marshal.GetLastWin32Error();
+            return false;
+        }
+
         try
         {
-            using var process = Process.Start(new ProcessStartInfo
+            var service = NativeOpenService(manager, serviceName, ServiceQueryStatus);
+            if (service == IntPtr.Zero)
             {
-                FileName = "sc.exe",
-                Arguments = $"{verb} \"{serviceName}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-
-            if (process is null)
-            {
-                return new ScResult(-1, string.Empty, "Could not start sc.exe");
+                errorCode = Marshal.GetLastWin32Error();
+                return false;
             }
 
-            var stdout = process.StandardOutput.ReadToEnd();
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit(5000);
-            return new ScResult(process.ExitCode, stdout, stderr);
+            try
+            {
+                return TryQueryServiceState(service, out state, out errorCode);
+            }
+            finally
+            {
+                NativeCloseServiceHandle(service);
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            return new ScResult(-1, string.Empty, ex.Message);
+            NativeCloseServiceHandle(manager);
         }
     }
 
-    private static string BuildScError(string verb, string serviceName, ScResult result)
+    private static bool TryQueryServiceState(IntPtr service, out uint state, out int errorCode)
     {
-        var details = string.Join(" ", new[] { result.Output, result.Error }
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value.Trim().ReplaceLineEndings(" ")));
+        var status = new ServiceStatusProcess();
+        if (!NativeQueryServiceStatusEx(
+                service,
+                ScStatusProcessInfo,
+                ref status,
+                Marshal.SizeOf<ServiceStatusProcess>(),
+                out _))
+        {
+            state = 0;
+            errorCode = Marshal.GetLastWin32Error();
+            return false;
+        }
 
-        return string.IsNullOrWhiteSpace(details)
-            ? $"sc.exe {verb} failed for {serviceName} (exit code {result.ExitCode}). Administrator privileges may be required."
-            : $"sc.exe {verb} failed for {serviceName} (exit code {result.ExitCode}): {details}";
+        state = status.CurrentState;
+        errorCode = 0;
+        return true;
     }
 
-    private sealed record ScResult(int ExitCode, string Output, string Error);
+    private static RuntimeActionResult WaitForServiceState(
+        IntPtr service,
+        string serviceName,
+        uint desiredState,
+        TimeSpan timeout,
+        string successMessage,
+        string timeoutMessage)
+    {
+        var sw = Stopwatch.StartNew();
+        while (sw.Elapsed < timeout)
+        {
+            if (!TryQueryServiceState(service, out var state, out var errorCode))
+            {
+                return Win32Failure("query service", serviceName, errorCode);
+            }
+
+            if (state == desiredState)
+            {
+                return new RuntimeActionResult(true, successMessage);
+            }
+
+            Thread.Sleep(250);
+        }
+
+        return new RuntimeActionResult(false, timeoutMessage);
+    }
+
+    private static RuntimeActionResult Win32Failure(string operation, string serviceName, int errorCode)
+    {
+        var friendly = errorCode switch
+        {
+            ErrorAccessDenied => "Access denied. Administrator privileges are required for this operation.",
+            ErrorServiceAlreadyRunning => "The service is already running.",
+            ErrorServiceNotActive => "The service is not running.",
+            _ => new Win32Exception(errorCode).Message
+        };
+
+        return new RuntimeActionResult(false,
+            $"Failed to {operation} '{serviceName}' (Win32 {errorCode}): {friendly}");
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ServiceStatus
+    {
+        public uint ServiceType;
+        public uint CurrentState;
+        public uint ControlsAccepted;
+        public uint Win32ExitCode;
+        public uint ServiceSpecificExitCode;
+        public uint CheckPoint;
+        public uint WaitHint;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ServiceStatusProcess
+    {
+        public uint ServiceType;
+        public uint CurrentState;
+        public uint ControlsAccepted;
+        public uint Win32ExitCode;
+        public uint ServiceSpecificExitCode;
+        public uint CheckPoint;
+        public uint WaitHint;
+        public uint ProcessId;
+        public uint ServiceFlags;
+    }
+
+    [DllImport("advapi32.dll", EntryPoint = "OpenSCManagerW", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr NativeOpenSCManager(string? machineName, string? databaseName, uint desiredAccess);
+
+    [DllImport("advapi32.dll", EntryPoint = "OpenServiceW", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr NativeOpenService(IntPtr serviceControlManager, string serviceName, uint desiredAccess);
+
+    [DllImport("advapi32.dll", EntryPoint = "StartServiceW", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool NativeStartService(IntPtr service, uint numServiceArgs, string[]? serviceArgVectors);
+
+    [DllImport("advapi32.dll", EntryPoint = "ControlService", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool NativeControlService(IntPtr service, uint control, ref ServiceStatus serviceStatus);
+
+    [DllImport("advapi32.dll", EntryPoint = "QueryServiceStatusEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool NativeQueryServiceStatusEx(
+        IntPtr service,
+        int infoLevel,
+        ref ServiceStatusProcess buffer,
+        int bufferSize,
+        out int bytesNeeded);
+
+    [DllImport("advapi32.dll", EntryPoint = "CloseServiceHandle", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool NativeCloseServiceHandle(IntPtr serviceHandle);
 }
 
 public sealed record RuntimeActionResult(bool Success, string Message);
