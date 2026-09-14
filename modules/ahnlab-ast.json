@@ -2,6 +2,7 @@
   "id": "ahnlab-ast",
   "name": "AhnLab Safe Transaction",
   "vendor": "AhnLab",
+  "sessionControl": "observeOnly",
   "serviceNames": ["SafeTransactionSVC"],
   "processes": [
     { "name": "ASDSvc.exe", "path": "C:\\Program Files\\AhnLab\\Safe Transaction\\ASDSvc.exe" }
