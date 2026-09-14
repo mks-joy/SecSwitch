@@ -1,7 +1,10 @@
 {
-  "id": "wizvera-process-manager",
+  "id": "wizvera",
   "name": "WIZVERA Process Manager",
   "vendor": "WIZVERA",
+  "descriptionKo": "금융·공공 웹사이트에서 여러 보안 구성요소의 실행·연동을 관리하는 프로세스 매니저입니다.",
+  "purpose": "보안 모듈 실행·연동 관리",
+  "knownUses": ["금융기관 웹사이트", "보안프로그램 통합설치 환경"],
   "serviceNames": ["WizveraPMSvc"],
   "processes": [
     { "name": "wpmsvc.exe", "path": "C:\\Program Files (x86)\\Wizvera\\Common\\wpmsvc\\wpmsvc.exe" }
