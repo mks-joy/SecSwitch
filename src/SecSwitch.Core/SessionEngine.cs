@@ -100,13 +100,16 @@ public static class SessionEngine
                         continue;
                     }
 
+                    // Persist cleanup intent before attempting the start. This deliberately
+                    // closes the failure window where a service starts successfully but the
+                    // start operation is reported as a timeout/error or the process exits
+                    // before we can write the session state. Restore is idempotent, so trying
+                    // to stop a service that never actually started is harmless.
+                    moduleState.StartedServices.Add(serviceName);
+                    SaveState(state);
+
                     var result = WindowsRuntime.StartService(serviceName);
                     await output.WriteLineAsync($"  {(result.Success ? "+" : "!")} {module.Name}: {result.Message}");
-                    if (result.Success && WindowsRuntime.IsServiceRunning(serviceName))
-                    {
-                        moduleState.StartedServices.Add(serviceName);
-                        SaveState(state);
-                    }
                 }
 
                 continue;
