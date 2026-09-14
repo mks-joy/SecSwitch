@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Microsoft.Win32;
 
 namespace SecSwitch.Core;
 
@@ -13,12 +12,12 @@ public static class ModuleScanner
 
         foreach (var serviceName in module.ServiceNames)
         {
-            if (ServiceExists(serviceName))
+            if (WindowsRuntime.ServiceExists(serviceName))
             {
                 installed = true;
                 evidence.Add($"service:{serviceName}");
 
-                if (IsServiceRunning(serviceName))
+                if (WindowsRuntime.IsServiceRunning(serviceName))
                 {
                     running = true;
                     evidence.Add($"running-service:{serviceName}");
@@ -60,43 +59,5 @@ public static class ModuleScanner
             Running = running,
             Evidence = evidence
         };
-    }
-
-    private static bool ServiceExists(string serviceName)
-    {
-        using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{serviceName}");
-        return key is not null;
-    }
-
-    private static bool IsServiceRunning(string serviceName)
-    {
-        try
-        {
-            using var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "sc.exe",
-                Arguments = $"query \"{serviceName}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-
-            if (process is null)
-            {
-                return false;
-            }
-
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(2000);
-
-            // SCM state 4 means SERVICE_RUNNING. The numeric state is stable across UI languages.
-            return output.Contains("STATE", StringComparison.OrdinalIgnoreCase)
-                   && output.Contains("4", StringComparison.Ordinal);
-        }
-        catch
-        {
-            return false;
-        }
     }
 }
