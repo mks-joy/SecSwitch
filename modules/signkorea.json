@@ -1,0 +1,9 @@
+{
+  "id": "signkorea-wd",
+  "name": "SignKoreaWD",
+  "vendor": "SignKorea",
+  "serviceNames": ["SignKoreaWD"],
+  "processes": [
+    { "name": "SignKoreaWD.exe", "path": "C:\\Program Files (x86)\\SignKorea\\skcert\\SignKoreaWD.exe" }
+  ]
+}
