@@ -2,6 +2,9 @@
   "id": "anysign4pc",
   "name": "AnySign4PC",
   "vendor": "SoftForum / Hancom WITH",
+  "descriptionKo": "공동인증서·전자서명 처리를 위해 금융·공공 웹사이트에서 사용하는 로컬 보안 모듈입니다.",
+  "purpose": "공동인증서 / 전자서명",
+  "knownUses": ["금융기관 웹사이트", "공공기관 전자서명 서비스"],
   "serviceNames": ["AnySign4PC Launcher"],
   "processes": [
     { "name": "AnySign4PCLauncher.exe", "path": "C:\\Program Files (x86)\\SoftForum\\XecureWeb\\AnySign\\dll\\AnySign4PCLauncher.exe" }
