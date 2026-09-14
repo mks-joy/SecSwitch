@@ -29,6 +29,21 @@ SecSwitch는 이러한 프로그램을 제거하거나 웹사이트의 보안 �
 - **동작의 투명성** — 어떤 모듈이 탐지되었고, 실행 중인지, SecSwitch가 무엇을 변경하려는지 사용자에게 보여줍니다.
 - **커뮤니티 기반 모듈 정의** — 제품별 서비스명·실행파일·탐지 정보는 코드에 하드코딩하지 않고 JSON 매니페스트로 관리합니다.
 
+### 현재 구현 상태
+
+- **v0.1 스캐너: 동작 확인 완료**
+  - 알려진 보안 모듈 설치 여부 탐지
+  - 서비스·프로세스 실행 상태 표시
+  - JSON 매니페스트 기반 탐지
+- **v0.2 세션 엔진: 알파 구현 중**
+  - 기본 5분 세션
+  - 세션 시작 시 기존 상태 기록
+  - SecSwitch가 시작한 서비스·프로세스만 종료 대상으로 기록
+  - 세션 연장 및 즉시 종료
+  - 세션 상태를 `%LOCALAPPDATA%\SecSwitch\session.json`에 저장
+
+현재 v0.2 CLI는 기능 검증용입니다. 최종 사용성은 기능 검증 후 Windows 트레이 앱에서 다듬을 예정입니다.
+
 ### 로드맵
 
 #### v0.1 — 읽기 전용 스캐너
@@ -36,7 +51,6 @@ SecSwitch는 이러한 프로그램을 제거하거나 웹사이트의 보안 �
 - 알려진 국내 웹 보안 모듈 설치 여부 탐지
 - 서비스·프로세스 실행 상태 표시
 - JSON 매니페스트 기반 모듈 정의 로딩
-- 서비스 시작·종료 등 시스템 변경은 하지 않음
 
 #### v0.2 — 보안 모듈 세션 관리
 
@@ -44,12 +58,14 @@ SecSwitch는 이러한 프로그램을 제거하거나 웹사이트의 보안 �
 - 세션 시작 전 상태 저장
 - SecSwitch가 직접 시작한 모듈만 세션 종료 시 정리
 - 세션 시간 연장 및 즉시 종료
+- 서비스 시작·종료 실패 시 다른 모듈 처리를 계속하고 오류 표시
 
 #### v0.3 — Windows 트레이 앱
 
 - 가벼운 트레이 UI
 - 현재 실행 중인 보안 모듈 상태 확인
 - 기본 5분 보안 모듈 세션
+- 클릭 한 번으로 세션 시작·연장·종료
 - Windows 시작 시 상주 여부 및 불필요한 백그라운드 실행 진단
 
 ### 초기 지원 대상
@@ -68,14 +84,13 @@ SecSwitch는 이러한 프로그램을 제거하거나 웹사이트의 보안 �
 - TouchEn nxFirewall
 - ExAdapter_NxWeb
 
-현재 단계에서 “지원”은 SecSwitch가 해당 모듈을 **탐지할 수 있음**을 의미합니다. 실행·종료 제어 기능은 제품별 동작을 검증하면서 보수적으로 추가합니다.
-
 ### 기술 스택
 
 - C# / .NET 10
 - Windows 전용
-- 가능한 경우 Windows 네이티브 서비스 상태 조회 사용
+- Windows 서비스 및 프로세스 상태 조회·제어
 - JSON 기반 모듈 매니페스트
+- GitHub Actions 기반 Windows 빌드 검증
 
 ### 빌드
 
@@ -83,19 +98,53 @@ SecSwitch는 이러한 프로그램을 제거하거나 웹사이트의 보안 �
 dotnet build SecSwitch.sln
 ```
 
-CLI 스캐너 실행:
+최신 소스 받기:
+
+```powershell
+git pull
+```
+
+CLI 스캐너:
 
 ```powershell
 dotnet run --project src/SecSwitch.Cli -- scan
 ```
 
+보안 모듈 세션 시작(기본 5분):
+
+```powershell
+dotnet run --project src/SecSwitch.Cli -- session start
+```
+
+시간 지정:
+
+```powershell
+dotnet run --project src/SecSwitch.Cli -- session start --minutes 5
+```
+
+세션 상태:
+
+```powershell
+dotnet run --project src/SecSwitch.Cli -- session status
+```
+
+5분 연장:
+
+```powershell
+dotnet run --project src/SecSwitch.Cli -- session extend --minutes 5
+```
+
+즉시 종료 및 원상복구:
+
+```powershell
+dotnet run --project src/SecSwitch.Cli -- session stop
+```
+
+> 현재 세션 엔진은 알파 단계입니다. 서비스 시작·종료에는 관리자 권한이 필요할 수 있으며, 기능 검증 중에는 중요한 작업을 진행하지 않는 상태에서 테스트하는 것을 권장합니다.
+
 ### 라이선스
 
 MIT License. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
-
-### 현재 상태
-
-초기 개발 단계입니다. 현재 우선순위는 서비스나 프로세스를 제어하기 전에 **신뢰할 수 있는 읽기 전용 탐지 및 상태 확인 엔진**을 만드는 것입니다.
 
 ---
 
@@ -120,6 +169,18 @@ SecSwitch does **not** bypass website security checks and does **not** disable W
 - **Transparent behavior.** Show what is detected, what is running, and what SecSwitch plans to change.
 - **Community-maintained module definitions.** Product-specific details live in JSON manifests rather than being hard-coded into the application.
 
+### Current implementation status
+
+- **v0.1 scanner: validated on a real Windows installation**
+- **v0.2 session engine: alpha implementation in progress**
+  - timed sessions
+  - pre-session state tracking
+  - restore only services/processes started by SecSwitch
+  - extend and stop commands
+  - persistent session state under LocalAppData
+
+The current CLI is intentionally developer-oriented. User experience will be refined after the runtime behavior is validated, primarily through a lightweight Windows tray application.
+
 ### Roadmap
 
 #### v0.1 — read-only scanner
@@ -127,7 +188,6 @@ SecSwitch does **not** bypass website security checks and does **not** disable W
 - Detect known security modules installed on Windows
 - Show service/process status
 - Load module definitions from JSON manifests
-- No start/stop or system modification
 
 #### v0.2 — managed security sessions
 
@@ -145,8 +205,6 @@ SecSwitch does **not** bypass website security checks and does **not** disable W
 
 ### Initial module set
 
-The first manifests are based on modules observed in real Korean banking/public-service workflows, including:
-
 - AnySign4PC
 - AhnLab Safe Transaction
 - nProtect Online Security
@@ -159,14 +217,13 @@ The first manifests are based on modules observed in real Korean banking/public-
 - TouchEn nxFirewall
 - ExAdapter_NxWeb
 
-Support currently means that SecSwitch knows how to identify the module. Runtime control will be added gradually and conservatively.
-
 ### Technology
 
 - C# / .NET 10
 - Windows-only
-- Native Windows service inspection where practical
+- Windows service/process inspection and control
 - JSON module manifests
+- GitHub Actions Windows build validation
 
 ### Build
 
@@ -174,16 +231,26 @@ Support currently means that SecSwitch knows how to identify the module. Runtime
 dotnet build SecSwitch.sln
 ```
 
-Run the CLI scanner:
+Scanner:
 
 ```powershell
 dotnet run --project src/SecSwitch.Cli -- scan
 ```
 
+Start a session:
+
+```powershell
+dotnet run --project src/SecSwitch.Cli -- session start --minutes 5
+```
+
+Status / extend / stop:
+
+```powershell
+dotnet run --project src/SecSwitch.Cli -- session status
+dotnet run --project src/SecSwitch.Cli -- session extend --minutes 5
+dotnet run --project src/SecSwitch.Cli -- session stop
+```
+
 ### License
 
 MIT. See [LICENSE](LICENSE).
-
-### Status
-
-Early development. The current priority is building a reliable, read-only inventory and status engine before adding any service/process control.
