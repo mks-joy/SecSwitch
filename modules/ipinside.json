@@ -1,7 +1,10 @@
 {
-  "id": "ipinside-lws",
+  "id": "ipinside",
   "name": "IPinside LWS",
   "vendor": "Interezen",
+  "descriptionKo": "접속 단말·네트워크 환경 정보를 확인하고 웹 보안 정책에 전달하는 로컬 모듈입니다.",
+  "purpose": "접속환경 확인 / 단말 보안",
+  "knownUses": ["금융기관 웹사이트", "일부 공공서비스"],
   "serviceNames": ["Interezen_service"],
   "processes": [
     { "name": "I3GMainSvc.exe", "path": "C:\\Program Files (x86)\\IPinside_LWS\\I3GMainSvc.exe" }
