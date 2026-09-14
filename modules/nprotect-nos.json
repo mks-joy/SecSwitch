@@ -1,0 +1,9 @@
+{
+  "id": "nprotect-nos",
+  "name": "nProtect Online Security",
+  "vendor": "INCA Internet",
+  "serviceNames": ["nossvc"],
+  "processes": [
+    { "name": "nossvc.exe", "path": "C:\\Program Files (x86)\\INCAInternet\\nProtect Online Security\\nossvc.exe" }
+  ]
+}
