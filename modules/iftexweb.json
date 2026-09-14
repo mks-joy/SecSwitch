@@ -2,6 +2,9 @@
   "id": "iftexweb",
   "name": "ExAdapter_NxWeb",
   "vendor": "Infotech Corporation",
+  "descriptionKo": "웹사이트와 로컬 보안 구성요소 사이의 연동을 위해 설치되는 어댑터형 보안 모듈입니다.",
+  "purpose": "웹-로컬 보안 모듈 연동",
+  "knownUses": ["일부 금융·공공 웹사이트"],
   "serviceNames": ["iftExWeb"],
   "processes": [
     { "name": "iftExWeb.exe", "path": "C:\\infotech\\iftNxService\\iftExWeb.exe" },
